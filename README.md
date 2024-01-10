@@ -8,7 +8,7 @@
 2. The [Industrial Shields Arduino boards](https://www.industrialshields.com/blog/industrial-shields-blog-1/post/installing-the-industrial-shields-boards-in-the-arduino-ide-63) or the [Industrial Shields ESP32 boards](https://www.industrialshields.com/blog/industrial-shields-blog-1/post/installing-the-industrial-shields-boards-in-the-arduino-ide-63) equivalent (optional, used in the examples).
 
 ### Installing
-1. Download the [library](http://www.github.com/industrialshields/arduino-tools40) from the GitHub as a "ZIP" file.
+1. Download the [library](https://github.com/Industrial-Shields/arduino-SimpleComm) from the GitHub as a "ZIP" file.
 2. From the Arduino IDE, select the downloaded "ZIP" file in the menu "Sketch/Include library/Add .ZIP library".
 3. Now you can open any example from the "File/Examples/Tools40" menu.
 
@@ -102,7 +102,7 @@ SimpleComm.begin(address);
 ```
 
 ## Compatibility between architectures
-This library relies on standard C++ types (e.g., unsigned long, int) which can function correctly if the communicating architectures maintain consistent type sizes. However, problems may arise if you try to communicate different CPU architectures, such as ESP32 and Arduino. The C++ types that are defined in each architecture have different sizes, which will cause communication errors.
+This library relies on standard C++ types (e.g., unsigned long, int) which can work correctly if the communicating architectures maintain consistent type sizes. However, problems may arise if you try to communicate different CPU architectures, such as ESP32 and Arduino. The C++ types that are defined in each architecture have different sizes, which will cause communication errors.
 
 To ensure proper communication between different architectures and to address potential type size issues, the library provides a solution through the "SimplePacketConfig.h" header file. This file allows users to customise the types used in the library, thereby fixing the size of the types for proper communication:
 * If you uncomment `#define UNIVERSAL_CPP` the types used will be the minimum size according to the C++ standard.
