@@ -19,43 +19,16 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 SimplePacket::SimplePacket() {
-	_data = nullptr;
 	_len = 0;
 	_destination = 0;
 	_source = 0;
 	_type = 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-SimplePacket::~SimplePacket() {
-	if (_data) {
-		delete[] _data;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-bool SimplePacket::init(uint8_t len) {
-	clear();
-
-	if (len > 0) {
-		_data = new uint8_t[len];
-		if (!_data) {
-			return false;
-		}
-		_len = len;
-	}
-
-	return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 void SimplePacket::clear() {
-	if (_data) {
-		delete[] _data;
-		_data = nullptr;
-	}
 	_len = 0;
 }
+
 
 #if !defined(UNIVERSAL_CPP) && !defined(CUSTOM_TYPES)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,10 +91,12 @@ bool SimplePacket::setData(const void *data, uint8_t len) {
 		len = 0;
 	}
 
+#ifdef SIMPLEPACKET_DYNAMIC_BUFFERS
 	if (!init(len)) {
 		// Memory error
 		return false;
 	}
+#endif
 
 	if (len > 0) {
 		memcpy(_data, data, len);

@@ -17,37 +17,13 @@
 
 #include "SimpleComm.h"
 
-// PACKET FORMAT:
-//  _____________________________________________________________________
-// |         |         |                                                 |
-// |         |         |                       PKT                       |
-// |_________|_________|_________________________________________________|
-// |         |         |                             |         |         |
-// |   SYN   |   LEN   |            HDR              |   DAT   |   CRC   |
-// |_________|_________|_____________________________|_________|_________|
-// |         |         |         |         |         |         |         |
-// | SYN (1) | LEN (1) | DST (1) | SRC (1) | TYP (1) |   DAT   | CRC (1) |
-// |_________|_________|_________|_________|_________|_________|_________|
-//
 
-#define SYN_LEN 1
-#define LEN_LEN 1
-#define DST_LEN 1
-#define SRC_LEN 1
-#define TYP_LEN 1
-#define HDR_LEN (DST_LEN + SRC_LEN + TYP_LEN)
-#define CRC_LEN 1
+#define PKT_LEN(dlen) (SIMPLECOMM_HDR_LEN + (dlen) + SIMPLECOMM_CRC_LEN)
 
-#define PKT_LEN(dlen) (HDR_LEN + (dlen) + CRC_LEN)
 
-#define SYN_VALUE 0x02
+static uint8_t _staticRxBuffer[SIMPLECOMM_BUFFER_SIZE];
+static uint8_t _staticRxBufferLen = 0;
 
-#define MAX_DATA_LEN 128
-#define BUFFER_SIZE (SYN_LEN + LEN_LEN + HDR_LEN + MAX_DATA_LEN + CRC_LEN)
-
-static uint8_t _txBuffer[BUFFER_SIZE];
-static uint8_t _rxBuffer[BUFFER_SIZE];
-static uint8_t _rxBufferLen = 0;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 SimpleCommClass::SimpleCommClass() {
@@ -61,18 +37,21 @@ void SimpleCommClass::begin(uint8_t address) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destination) {
-	packet.setSource(_address);
-	packet.setDestination(destination);
-
 	uint8_t dlen;
-	const uint8_t *data = (const uint8_t *) packet.getData(dlen);
 
-	if (dlen > MAX_DATA_LEN) {
+	if (dlen > SIMPLECOMM_MAX_DATA_LEN) {
 		return false;
 	}
 
+	const uint8_t *data = (const uint8_t*) packet.getData(dlen);
+        uint8_t _txBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + PKT_LEN(dlen)];
+
+	packet.setSource(_address);
+	packet.setDestination(destination);
+
+
 	uint8_t *ptr = _txBuffer;
-	*ptr++ = SYN_VALUE;
+	*ptr++ = SIMPLECOMM_SYN_VALUE;
 	*ptr++ = PKT_LEN(dlen);
 	*ptr++ = packet.getDestination();
 	*ptr++ = packet.getSource();
@@ -81,7 +60,7 @@ bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destina
 		memcpy(ptr, data, dlen);
 		ptr += dlen;
 	}
-	*ptr++ = calcCRC(_txBuffer + SYN_LEN + LEN_LEN, HDR_LEN + dlen);
+	*ptr++ = calcCRC(_txBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN, SIMPLECOMM_HDR_LEN + dlen);
 
 	size_t tlen = ptr - _txBuffer;
 	return stream.write(_txBuffer, tlen) == tlen;
@@ -94,55 +73,67 @@ bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destina
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
+bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet, uint8_t* auxRxBuffer, uint8_t* auxRxBufferLen) {
+	if (auxRxBuffer == nullptr || auxRxBufferLen == nullptr) {
+		auxRxBuffer = _staticRxBuffer;
+		auxRxBufferLen = &_staticRxBufferLen;
+	}
+
 	while (stream.available()) {
 		uint8_t in = stream.read();
 
-		if ((_rxBufferLen == 0) && (in != SYN_VALUE)) {
+		if ((*auxRxBufferLen == 0) && (in != SIMPLECOMM_SYN_VALUE)) {
 			// Unsynchronized
 			continue;
 		}
 
-		if ((_rxBufferLen == SYN_LEN) && ((in > (HDR_LEN + MAX_DATA_LEN + CRC_LEN)) || (in < (HDR_LEN + CRC_LEN)))) {
+		if ((*auxRxBufferLen == SIMPLECOMM_SYN_LEN)
+		    && (
+			(in > (SIMPLECOMM_HDR_LEN + SIMPLECOMM_MAX_DATA_LEN + SIMPLECOMM_CRC_LEN))
+			|| (in < (SIMPLECOMM_HDR_LEN + SIMPLECOMM_CRC_LEN))
+			)) {
 			// Invalid data length
-			_rxBufferLen = 0;
+			*auxRxBufferLen = 0;
 			continue;
 		}
 
-		_rxBuffer[_rxBufferLen++] = in;
+		auxRxBuffer[(*auxRxBufferLen)++] = in;
 
-		if (_rxBufferLen > SYN_LEN + LEN_LEN + HDR_LEN) {
-			uint8_t tlen = _rxBuffer[1];
-			if (_rxBufferLen == (tlen + SYN_LEN + LEN_LEN)) {
+		if (*auxRxBufferLen > SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + SIMPLECOMM_HDR_LEN) {
+			uint8_t tlen = auxRxBuffer[1];
+			if (*auxRxBufferLen == (tlen + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN)) {
 				// Buffer complete
 
 				// Check CRC
-				if (_rxBuffer[SYN_LEN + LEN_LEN + tlen - CRC_LEN] != calcCRC(_rxBuffer + SYN_LEN + LEN_LEN, tlen - CRC_LEN)) {
+				if (auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + tlen - SIMPLECOMM_CRC_LEN] !=
+				    calcCRC(auxRxBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN, tlen - SIMPLECOMM_CRC_LEN)) {
 					// Invalid CRC
-					_rxBufferLen = 0;
+					*auxRxBufferLen = 0;
 					continue;
 				}
 
 				// Check destination
 				// if my address is 0 then receive all messages
 				// if destination address is 0 then it is a broadcast message
-				if (_address != 0 && _rxBuffer[SYN_LEN + LEN_LEN] != 0 && _rxBuffer[SYN_LEN + LEN_LEN] != _address) {
+				if (_address != 0
+				    && auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN] != 0
+				    && auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN] != _address) {
 					// It is not for me
-					_rxBufferLen = 0;
+					*auxRxBufferLen = 0;
 					continue;
 				}
 
-				uint8_t *ptr = _rxBuffer + SYN_LEN + LEN_LEN;
+				uint8_t *ptr = auxRxBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN;
 				packet.setDestination(*ptr++);
 				packet.setSource(*ptr++);
 				packet.setType(*ptr++);
-				if (!packet.setData(ptr, tlen - HDR_LEN - CRC_LEN)) {
+				if (!packet.setData(ptr, tlen - SIMPLECOMM_HDR_LEN - SIMPLECOMM_CRC_LEN)) {
 					// Internal error
-					_rxBufferLen = 0;
+					*auxRxBufferLen = 0;
 					return false;
 				}
 
-				_rxBufferLen = 0;
+				*auxRxBufferLen = 0;
 				return true;
 			}
 		}
