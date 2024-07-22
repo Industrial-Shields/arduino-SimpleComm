@@ -100,6 +100,7 @@ bool SimplePacket::setData(const void *data, uint8_t len) {
 
 	if (len > 0) {
 		memcpy(_data, data, len);
+		_len = len;
 	}
 
 	return true;
