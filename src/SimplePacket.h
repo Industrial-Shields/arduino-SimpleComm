@@ -37,6 +37,8 @@ public:
 	bool setData(const String &data);
 #endif
 	bool setData(const char *data);
+	bool setData(const __FlashStringHelper* data);
+	bool setData(const __FlashStringHelper* data, uint8_t expectedLength);
 	bool setData(const void *data, uint8_t len);
 
 	#if !defined(UNIVERSAL_CPP) && !defined(CUSTOM_TYPES)
@@ -53,6 +55,8 @@ public:
 	bool addData(const String &data);
 #endif
 	bool addData(const char *data);
+	bool addData(const __FlashStringHelper* data);
+	bool addData(const __FlashStringHelper* data, uint8_t expectedLength);
 	bool addData(const void *data, uint8_t len);
 
 	bool getBool() const;

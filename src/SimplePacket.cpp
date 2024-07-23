@@ -85,6 +85,19 @@ bool SimplePacket::setData(const char *data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+bool SimplePacket::setData(const __FlashStringHelper* data) {
+	return setData(data, SIMPLEPACKET_DEFAULT_SIZE);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+bool SimplePacket::setData(const __FlashStringHelper* data, uint8_t expectedLength) {
+	char buffer[expectedLength + 1];
+	strncpy_P(buffer, (const char*) data, expectedLength);
+	buffer[expectedLength] = '\0';
+	return setData(buffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::setData(const void *data, uint8_t len) {
 #ifdef SIMPLEPACKET_DYNAMIC_BUFFERS
 	if (!data) {
@@ -159,6 +172,19 @@ bool SimplePacket::addData(const String &data) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::addData(const char *data) {
 	return addData(data, strlen(data) + 1);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+bool SimplePacket::addData(const __FlashStringHelper* data) {
+	return addData(data, SIMPLEPACKET_DEFAULT_SIZE - _len);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+bool SimplePacket::addData(const __FlashStringHelper* data, uint8_t expectedLength) {
+	char buffer[expectedLength + 1 - _len];
+	strncpy_P(buffer, (const char*) data, expectedLength - _len);
+	buffer[expectedLength - _len] = '\0';
+	return addData(buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
