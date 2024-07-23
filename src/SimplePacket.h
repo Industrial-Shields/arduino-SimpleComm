@@ -39,6 +39,22 @@ public:
 	bool setData(const char *data);
 	bool setData(const void *data, uint8_t len);
 
+	#if !defined(UNIVERSAL_CPP) && !defined(CUSTOM_TYPES)
+	bool addData(SP_BOOL data);
+#endif
+	bool addData(SP_CHAR data);
+	bool addData(SP_UCHAR data);
+	bool addData(SP_INT data);
+	bool addData(SP_UINT data);
+	bool addData(SP_LONG data);
+	bool addData(SP_ULONG data);
+	bool addData(SP_DOUBLE data);
+#ifdef SP_STRING_TYPE
+	bool addData(const String &data);
+#endif
+	bool addData(const char *data);
+	bool addData(const void *data, uint8_t len);
+
 	bool getBool() const;
 	char getChar() const;
 	unsigned char getUChar() const;
