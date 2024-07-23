@@ -11,6 +11,7 @@ getSource	KEYWORD2
 getDestination	KEYWORD2
 getType	KEYWORD2
 setData	KEYWORD2
+addData	KEYWORD2
 getBool	KEYWORD2
 getChar	KEYWORD2
 getUChar	KEYWORD2
