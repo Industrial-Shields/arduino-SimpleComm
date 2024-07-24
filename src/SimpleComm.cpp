@@ -39,12 +39,12 @@ void SimpleCommClass::begin(uint8_t address) {
 bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destination) {
 	uint8_t dlen;
 
+	const uint8_t *data = (const uint8_t*) packet.getData(dlen);
+        uint8_t _txBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + PKT_LEN(dlen)];
+
 	if (dlen > SIMPLECOMM_MAX_DATA_LEN) {
 		return false;
 	}
-
-	const uint8_t *data = (const uint8_t*) packet.getData(dlen);
-        uint8_t _txBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + PKT_LEN(dlen)];
 
 	packet.setSource(_address);
 	packet.setDestination(destination);
