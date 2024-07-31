@@ -19,14 +19,14 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 SimplePacket::SimplePacket() {
-	_len = 0;
-	_destination = 0;
-	_source = 0;
-	_type = 0;
+	_dataLen = 0;
+	_exhausted = false;
+	memset(&_buff, 0, sizeof(_buff));
 }
 
 void SimplePacket::clear() {
-	_len = 0;
+	_dataLen = 0;
+	_exhausted = false;
 }
 
 
@@ -86,7 +86,7 @@ bool SimplePacket::setData(const char *data) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::setData(const __FlashStringHelper* data) {
-	return setData(data, SIMPLEPACKET_DEFAULT_SIZE);
+	return setData(data, SP_MAX_DATA_LEN);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,24 +99,9 @@ bool SimplePacket::setData(const __FlashStringHelper* data, uint8_t expectedLeng
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::setData(const void *data, uint8_t len) {
-#ifdef SIMPLEPACKET_DYNAMIC_BUFFERS
-	if (!data) {
-		// Empty packet
-		len = 0;
-	}
+	clear();
 
-        if (!init(len)) {
-		// Memory error
-		return false;
-	}
-#endif
-
-	if (len > 0) {
-		memcpy(_data, data, len);
-		_len = len;
-	}
-
-	return true;
+	return addData(data, len);
 }
 
 
@@ -176,34 +161,26 @@ bool SimplePacket::addData(const char *data) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::addData(const __FlashStringHelper* data) {
-	return addData(data, SIMPLEPACKET_DEFAULT_SIZE - _len);
+	return addData(data, SP_MAX_DATA_LEN - _dataLen);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::addData(const __FlashStringHelper* data, uint8_t expectedLength) {
-	char buffer[expectedLength + 1 - _len];
-	strncpy_P(buffer, (const char*) data, expectedLength - _len);
-	buffer[expectedLength - _len] = '\0';
+	char buffer[expectedLength + 1 - _dataLen];
+	strncpy_P(buffer, (const char*) data, expectedLength - _dataLen);
+	buffer[expectedLength - _dataLen] = '\0';
 	return addData(buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::addData(const void *data, uint8_t len) {
-#ifdef SIMPLEPACKET_DYNAMIC_BUFFERS
-	if (!data) {
-		// Empty packet
-		len = 0;
-	}
-
-	if (!init(len)) {
-		// Memory error
+	if (((uint16_t) _dataLen + len) > SP_MAX_DATA_LEN) {
 		return false;
 	}
-#endif
 
-	if (len > 0) {
-		memcpy(_data + _len, data, len);
-		_len += len;
+	else if (len > 0) {
+		memcpy(_buff.data + _dataLen, data, len);
+		_dataLen += len;
 	}
 
 	return true;
@@ -212,123 +189,123 @@ bool SimplePacket::addData(const void *data, uint8_t len) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimplePacket::getBool() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return false;
 	}
 
-	return *(SP_BOOL *) _data;
+	return *(SP_BOOL *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 char SimplePacket::getChar() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return '\0';
 	}
 
-	return *(SP_CHAR *) _data;
+	return *(SP_CHAR *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 unsigned char SimplePacket::getUChar() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return '\0';
 	}
 
-	return *(SP_UCHAR *) _data;
+	return *(SP_UCHAR *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 int SimplePacket::getInt() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return 0;
 	}
 
-	return *(SP_INT *) _data;
+	return *(SP_INT *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 unsigned int SimplePacket::getUInt() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return 0;
 	}
 
-	return *(SP_UINT *) _data;
+	return *(SP_UINT *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 long SimplePacket::getLong() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return 0L;
 	}
 
-	return *(SP_LONG *) _data;
+	return *(SP_LONG *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 unsigned long SimplePacket::getULong() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return 0UL;
 	}
 
-	return *(SP_ULONG *) _data;
+	return *(SP_ULONG *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 double SimplePacket::getDouble() const {
-	if (!_data) {
+	if (!_buff.data) {
 		return 0.0L;
 	}
 
-	return *(SP_DOUBLE *) _data;
+	return *(SP_DOUBLE *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 const char *SimplePacket::getString() const {
-	return (const char *) _data;
+	return (const char *) _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 const void *SimplePacket::getData() const {
-	return _data;
+	return _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 const void *SimplePacket::getData(uint8_t &len) const {
-	len = _len;
-	return _data;
+	len = getDataLength();
+	return _buff.data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void SimplePacket::setSource(uint8_t source) {
-	_source = source;
+	_buff.source = source;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void SimplePacket::setDestination(uint8_t destination) {
-	_destination = destination;
+	_buff.destination = destination;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void SimplePacket::setType(uint8_t type) {
-	_type = type;
+	_buff.type = type;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 uint8_t SimplePacket::getSource() const {
-	return _source;
+	return _buff.source;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 uint8_t SimplePacket::getDestination() const {
-	return _destination;
+	return _buff.destination;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 uint8_t SimplePacket::getType() const {
-	return _type;
+	return _buff.type;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 uint8_t SimplePacket::getDataLength() const {
-	return _len;
+	return _dataLen;
 }

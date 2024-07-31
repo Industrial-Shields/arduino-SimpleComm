@@ -4,12 +4,43 @@
 #include "SimplePacketConfig.h"
 
 
-#define SIMPLEPACKET_DEFAULT_SIZE 128
+// PACKET FORMAT:
+//  _____________________________________________________________________
+// |         |         |                                                 |
+// |         |         |                       PKT                       |
+// |_________|_________|_________________________________________________|
+// |         |         |                             |         |         |
+// |   SYN   |   LEN   |            HDR              |   DAT   |   CRC   |
+// |_________|_________|_____________________________|_________|_________|
+// |         |         |         |         |         |         |         |
+// | SYN (1) | LEN (1) | DST (1) | SRC (1) | TYP (1) |   DAT   | CRC (1) |
+// |_________|_________|_________|_________|_________|_________|_________|
+//
 
+#define SP_SYN_LEN 1
+#define SP_LEN_LEN 1
+#define SP_DST_LEN 1
+#define SP_SRC_LEN 1
+#define SP_TYP_LEN 1
+#define SP_HDR_LEN (SP_DST_LEN + SP_SRC_LEN + SP_TYP_LEN)
+#define SP_MAX_DATA_LEN 128
+#define SP_CRC_LEN 1
+
+#define SP_SYN_VALUE 0x02
+
+#define SP_BUFFER_SIZE (SP_SYN_LEN +		\
+			SP_LEN_LEN +		\
+			SP_HDR_LEN +		\
+			SP_MAX_DATA_LEN +	\
+			SP_CRC_LEN)
+
+#define SP_BUFF_READ_OFFSET (SP_SYN_LEN + SP_LEN_LEN + SP_HDR_LEN)
 
 
 class SimplePacket {
 public:
+	friend class SimpleCommClass;
+
 	explicit SimplePacket();
 
 	// Packet functions
@@ -73,14 +104,17 @@ public:
 
 	uint8_t getDataLength() const;
 
-
 private:
-	uint8_t _source;
-	uint8_t _destination;
-	uint8_t _type;
-	uint8_t _len;
-
-	uint8_t _data[SIMPLEPACKET_DEFAULT_SIZE];
+        struct {
+		uint8_t syn;
+		uint8_t expectedLen;
+		uint8_t source;
+		uint8_t destination;
+		uint8_t type;
+		uint8_t data[SP_MAX_DATA_LEN + SP_CRC_LEN];
+	} _buff;
+	uint8_t _dataLen;
+	uint8_t _exhausted;
 };
 
 #endif // __SimplePacket_H__

@@ -1,28 +1,27 @@
 /*
-   Copyright (c) 2017 Boot&Work Corp., S.L. All rights reserved
+  Copyright (c) 2017 Boot&Work Corp., S.L. All rights reserved
 
-   This library is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Lesser General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+  This library is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Lesser General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
 
-   This library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Lesser General Public License for more details.
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Lesser General Public License for more details.
 
-   You should have received a copy of the GNU Lesser General Public License
-   along with this library.  If not, see <http://www.gnu.org/licenses/>.
- */
+  You should have received a copy of the GNU Lesser General Public License
+  along with this library.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include "SimpleComm.h"
 
 
-#define PKT_LEN(dlen) (SIMPLECOMM_HDR_LEN + (dlen) + SIMPLECOMM_CRC_LEN)
+// #define SIMPLECOMM_DEBUG
 
 
-static uint8_t _staticRxBuffer[SIMPLECOMM_BUFFER_SIZE];
-static uint8_t _staticRxBufferLen = 0;
+#define PKT_LEN(dlen) (SP_HDR_LEN + (dlen) + SP_CRC_LEN)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,33 +36,23 @@ void SimpleCommClass::begin(uint8_t address) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destination) {
-	uint8_t dlen;
+	packet._buff.syn = SP_SYN_VALUE;
 
-	const uint8_t *data = (const uint8_t*) packet.getData(dlen);
-        uint8_t _txBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + PKT_LEN(dlen)];
-
-	if (dlen > SIMPLECOMM_MAX_DATA_LEN) {
+	uint8_t dataLength = packet.getDataLength();
+	if (dataLength > SP_MAX_DATA_LEN) {
 		return false;
 	}
 
+	packet._exhausted = true;
+
+	packet._buff.expectedLen = PKT_LEN(dataLength);
 	packet.setSource(_address);
 	packet.setDestination(destination);
 
+	packet._buff.data[dataLength] = calcCRC(&packet._buff.source, SP_HDR_LEN + dataLength);
 
-	uint8_t *ptr = _txBuffer;
-	*ptr++ = SIMPLECOMM_SYN_VALUE;
-	*ptr++ = PKT_LEN(dlen);
-	*ptr++ = packet.getDestination();
-	*ptr++ = packet.getSource();
-	*ptr++ = packet.getType();
-	if (dlen > 0) {
-		memcpy(ptr, data, dlen);
-		ptr += dlen;
-	}
-	*ptr++ = calcCRC(_txBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN, SIMPLECOMM_HDR_LEN + dlen);
-
-	size_t tlen = ptr - _txBuffer;
-	return stream.write(_txBuffer, tlen) == tlen;
+	uint8_t totalLength = SP_SYN_LEN + SP_LEN_LEN + PKT_LEN(dataLength);
+	return stream.write(&packet._buff.syn, totalLength) == totalLength;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,42 +62,53 @@ bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destina
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet, uint8_t* auxRxBuffer, uint8_t* auxRxBufferLen) {
-	if (auxRxBuffer == nullptr || auxRxBufferLen == nullptr) {
-		auxRxBuffer = _staticRxBuffer;
-		auxRxBufferLen = &_staticRxBufferLen;
+bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
+	uint8_t* rxBuffer = &packet._buff.syn;
+	uint8_t* rxBufferLen = &packet._dataLen;
+
+	if (packet._exhausted) {
+#ifdef SIMPLECOMM_DEBUG
+		Serial.println(F("Packet is exhausted, clearing it..."));
+#endif
+		packet.clear();
 	}
 
 	while (stream.available()) {
 		uint8_t in = stream.read();
 
-		if ((*auxRxBufferLen == 0) && (in != SIMPLECOMM_SYN_VALUE)) {
-			// Unsynchronized
+		if ((*rxBufferLen == 0) && (in != SP_SYN_VALUE)) {
+#ifdef SIMPLECOMM_DEBUG
+			Serial.println(F("Unsynchronized"));
+#endif
 			continue;
 		}
 
-		if ((*auxRxBufferLen == SIMPLECOMM_SYN_LEN)
+		if ((*rxBufferLen == SP_SYN_LEN)
 		    && (
-			(in > (SIMPLECOMM_HDR_LEN + SIMPLECOMM_MAX_DATA_LEN + SIMPLECOMM_CRC_LEN))
-			|| (in < (SIMPLECOMM_HDR_LEN + SIMPLECOMM_CRC_LEN))
+			(in > (SP_HDR_LEN + SP_MAX_DATA_LEN + SP_CRC_LEN))
+			|| (in < (SP_HDR_LEN + SP_CRC_LEN))
 			)) {
-			// Invalid data length
-			*auxRxBufferLen = 0;
+#ifdef SIMPLECOMM_DEBUG
+			Serial.println(F("Invalid data length"));
+#endif
+			packet.clear();
 			continue;
 		}
 
-		auxRxBuffer[(*auxRxBufferLen)++] = in;
+		rxBuffer[(*rxBufferLen)++] = in;
 
-		if (*auxRxBufferLen > SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + SIMPLECOMM_HDR_LEN) {
-			uint8_t tlen = auxRxBuffer[1];
-			if (*auxRxBufferLen == (tlen + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN)) {
+		if (*rxBufferLen > SP_SYN_LEN + SP_LEN_LEN + SP_HDR_LEN) {
+			uint8_t tlen = rxBuffer[1];
+			if (*rxBufferLen == (tlen + SP_SYN_LEN + SP_LEN_LEN)) {
 				// Buffer complete
 
 				// Check CRC
-				if (auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN + tlen - SIMPLECOMM_CRC_LEN] !=
-				    calcCRC(auxRxBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN, tlen - SIMPLECOMM_CRC_LEN)) {
-					// Invalid CRC
-					*auxRxBufferLen = 0;
+				if (rxBuffer[SP_SYN_LEN + SP_LEN_LEN + tlen - SP_CRC_LEN] !=
+				    calcCRC(rxBuffer + SP_SYN_LEN + SP_LEN_LEN, tlen - SP_CRC_LEN)) {
+#ifdef SIMPLECOMM_DEBUG
+					Serial.println(F("Invalid CRC"));
+#endif
+					packet.clear();
 					continue;
 				}
 
@@ -116,24 +116,34 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet, uint8_t* aux
 				// if my address is 0 then receive all messages
 				// if destination address is 0 then it is a broadcast message
 				if (_address != 0
-				    && auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN] != 0
-				    && auxRxBuffer[SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN] != _address) {
-					// It is not for me
-					*auxRxBufferLen = 0;
+				    && rxBuffer[SP_SYN_LEN + SP_LEN_LEN] != 0
+				    && rxBuffer[SP_SYN_LEN + SP_LEN_LEN] != _address) {
+#ifdef SIMPLECOMM_DEBUG
+					Serial.println(F("Received package it's not for me"));
+#endif
+					packet.clear();
 					continue;
 				}
 
-				uint8_t *ptr = auxRxBuffer + SIMPLECOMM_SYN_LEN + SIMPLECOMM_LEN_LEN;
-				packet.setDestination(*ptr++);
-				packet.setSource(*ptr++);
-				packet.setType(*ptr++);
-				if (!packet.setData(ptr, tlen - SIMPLECOMM_HDR_LEN - SIMPLECOMM_CRC_LEN)) {
-					// Internal error
-					*auxRxBufferLen = 0;
-					return false;
-				}
+				packet._dataLen -= SP_SYN_LEN + SP_LEN_LEN + SP_HDR_LEN + SP_CRC_LEN;
+#ifdef SIMPLECOMM_DEBUG
+				Serial.print(F("Good package with len "));
+				Serial.print(packet._dataLen);
+				Serial.print(F(": "));
+				for (uint8_t c = 0; c < packet._dataLen; c++) {
+					uint8_t ch = packet._buff.data[c];
+					if (isAlphaNumeric(ch)) {
+						Serial.write(ch);
+					}
+					else {
+						Serial.print(F("\\x"));
+						Serial.print(ch, HEX);
+					}
 
-				*auxRxBufferLen = 0;
+				}
+#endif
+				packet._exhausted = true;
+
 				return true;
 			}
 		}
@@ -143,7 +153,7 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet, uint8_t* aux
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-uint8_t SimpleCommClass::calcCRC(uint8_t *buffer, size_t len) {
+uint8_t SimpleCommClass::calcCRC(const uint8_t *buffer, size_t len) {
 	uint8_t ret = 0;
 	while (len--) {
 		ret += *buffer++;
