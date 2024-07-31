@@ -14,7 +14,7 @@ what you define. */
 
 #if defined(UNIVERSAL_CPP)
 #define SP_BOOL uint8_t
-#define SP_CHAR int8_t
+#define SP_CHAR char
 #define SP_UCHAR SP_BOOL
 #define SP_INT int16_t
 #define SP_UINT uint16_t
@@ -24,7 +24,7 @@ what you define. */
 
 #elif defined(CUSTOM_TYPES)
 #define SP_BOOL uint8_t
-#define SP_CHAR int8_t
+#define SP_CHAR char
 #define SP_UCHAR SP_BOOL
 #define SP_INT int16_t
 #define SP_UINT uint16_t
