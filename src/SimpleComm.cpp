@@ -20,6 +20,21 @@
 
 // #define SIMPLECOMM_DEBUG
 
+#ifdef SIMPLECOMM_DEBUG
+static void printBuff(const uint8_t* buff, uint8_t len) {
+	for (uint8_t c = 0; c < len; c++) {
+		uint8_t ch = buff[c];
+		if (isAlphaNumeric(ch)) {
+			Serial.write(ch);
+		}
+		else {
+			Serial.print(F("\\x"));
+			Serial.print(ch, HEX);
+		}
+	}
+}
+#endif
+
 
 #define PKT_LEN(dlen) (SP_HDR_LEN + (dlen) + SP_CRC_LEN)
 
@@ -52,7 +67,16 @@ bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destina
 	packet._buff.data[dataLength] = calcCRC(&packet._buff.source, SP_HDR_LEN + dataLength);
 
 	uint8_t totalLength = SP_SYN_LEN + SP_LEN_LEN + PKT_LEN(dataLength);
-	return stream.write(&packet._buff.syn, totalLength) == totalLength;
+
+	bool ret = stream.write(&packet._buff.syn, totalLength) == totalLength;
+#ifdef SIMPLECOMM_DEBUG
+	Serial.print(F("Sent package with len "));
+	Serial.print(totalLength);
+        Serial.print(F(": "));
+	printBuff(&packet._buff.syn, totalLength);
+	Serial.println();
+#endif
+	return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,7 +102,8 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 
 		if ((*rxBufferLen == 0) && (in != SP_SYN_VALUE)) {
 #ifdef SIMPLECOMM_DEBUG
-			Serial.println(F("Unsynchronized"));
+			Serial.print(F("Unsynchronized: "));
+			Serial.println(in, HEX);
 #endif
 			continue;
 		}
@@ -103,10 +128,15 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 				// Buffer complete
 
 				// Check CRC
-				if (rxBuffer[SP_SYN_LEN + SP_LEN_LEN + tlen - SP_CRC_LEN] !=
-				    calcCRC(rxBuffer + SP_SYN_LEN + SP_LEN_LEN, tlen - SP_CRC_LEN)) {
+				uint8_t expectedCrc = calcCRC(rxBuffer + SP_SYN_LEN + SP_LEN_LEN, tlen - SP_CRC_LEN);
+				if (rxBuffer[SP_SYN_LEN + SP_LEN_LEN + tlen - SP_CRC_LEN] != expectedCrc) {
 #ifdef SIMPLECOMM_DEBUG
-					Serial.println(F("Invalid CRC"));
+					Serial.print(F("Invalid CRC: "));
+					Serial.print(rxBuffer[SP_SYN_LEN + SP_LEN_LEN + tlen - SP_CRC_LEN], HEX);
+					Serial.print(F(" != "));
+					Serial.print(expectedCrc, HEX);
+					Serial.println();
+					printBuff(rxBuffer, SP_SYN_LEN + SP_LEN_LEN + tlen);
 #endif
 					packet.clear();
 					continue;
@@ -130,17 +160,8 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 				Serial.print(F("Good package with len "));
 				Serial.print(packet._dataLen);
 				Serial.print(F(": "));
-				for (uint8_t c = 0; c < packet._dataLen; c++) {
-					uint8_t ch = packet._buff.data[c];
-					if (isAlphaNumeric(ch)) {
-						Serial.write(ch);
-					}
-					else {
-						Serial.print(F("\\x"));
-						Serial.print(ch, HEX);
-					}
-
-				}
+				printBuff(packet._buff.data, packet._dataLen);
+				Serial.println();
 #endif
 				packet._exhausted = true;
 
