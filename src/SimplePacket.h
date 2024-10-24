@@ -108,8 +108,8 @@ private:
         struct {
 		uint8_t syn;
 		uint8_t expectedLen;
-		uint8_t source;
 		uint8_t destination;
+		uint8_t source;
 		uint8_t type;
 		uint8_t data[SP_MAX_DATA_LEN + SP_CRC_LEN];
 	} _buff;

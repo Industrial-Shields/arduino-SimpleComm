@@ -64,7 +64,12 @@ bool SimpleCommClass::send(Stream &stream, SimplePacket &packet, uint8_t destina
 	packet.setSource(_address);
 	packet.setDestination(destination);
 
-	packet._buff.data[dataLength] = calcCRC(&packet._buff.source, SP_HDR_LEN + dataLength);
+#ifdef SIMPLECOMM_DEBUG
+	Serial.print(F("Sending package from 0x")); Serial.print(packet.getSource(), HEX);
+	Serial.print(F(" to 0x")); Serial.println(packet.getDestination(), HEX);
+#endif
+
+	packet._buff.data[dataLength] = calcCRC(&packet._buff.destination, SP_HDR_LEN + dataLength);
 
 	uint8_t totalLength = SP_SYN_LEN + SP_LEN_LEN + PKT_LEN(dataLength);
 
@@ -102,7 +107,7 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 
 		if ((*rxBufferLen == 0) && (in != SP_SYN_VALUE)) {
 #ifdef SIMPLECOMM_DEBUG
-			Serial.print(F("Unsynchronized: "));
+			Serial.print(F("Unsynchronized. Byte received was: "));
 			Serial.println(in, HEX);
 #endif
 			continue;
@@ -114,7 +119,8 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 			|| (in < (SP_HDR_LEN + SP_CRC_LEN))
 			)) {
 #ifdef SIMPLECOMM_DEBUG
-			Serial.println(F("Invalid data length"));
+			Serial.print(F("Invalid data length: "));
+			Serial.println(in);
 #endif
 			packet.clear();
 			continue;
@@ -149,7 +155,8 @@ bool SimpleCommClass::receive(Stream &stream, SimplePacket &packet) {
 				    && rxBuffer[SP_SYN_LEN + SP_LEN_LEN] != 0
 				    && rxBuffer[SP_SYN_LEN + SP_LEN_LEN] != _address) {
 #ifdef SIMPLECOMM_DEBUG
-					Serial.println(F("Received package it's not for me"));
+					Serial.print(F("Received package it's not for me, it was for 0x"));
+					Serial.println(rxBuffer[SP_SYN_LEN + SP_LEN_LEN], HEX);
 #endif
 					packet.clear();
 					continue;
